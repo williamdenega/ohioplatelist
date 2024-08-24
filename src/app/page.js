@@ -48,32 +48,36 @@ export default function Home() {
   useEffect(() => {
     const fetchAllPlates = async () => {
       try {
-        const fetchPromises = [];
-        for (let i = 1; i <= totalPlates; i++) {
-          fetchPromises.push(
-            fetchPlates(i).then((data) => {
-              setProgress((prevProgress) => {
-                const newProgress = Math.min(prevProgress + 1, totalPlates);
-                // Update fact every 10% progress
-                if (newProgress % (totalPlates / 10) === 0) {
-                  setCurrentFact(facts[Math.floor(Math.random() * facts.length)]);
+        const batchSize = 20; // Smaller batch size for smoother progress
+        let allPlates = [];
+
+        for (let i = 1; i <= totalPlates; i += batchSize) {
+          const batchPromises = [];
+          for (let j = i; j < i + batchSize && j <= totalPlates; j++) {
+            batchPromises.push(
+              fetchPlates(j).then((data) => {
+                setProgress((prevProgress) => {
+                  const newProgress = prevProgress + 1; // Increment by 1 for each fetch
+                  return newProgress;
+                });
+
+                if (data) {
+                  return { plate: j, data };
                 }
-                return newProgress;
-              });
+                return null;
+              })
+            );
+          }
 
-              if (data) {
-                return { plate: i, data };
-              }
-              return null;
-            })
-          );
+          const batchResults = await Promise.all(batchPromises);
+
+          // Filter out null values (plates without images) and add to allPlates
+          const filteredResults = batchResults.filter(plate => plate !== null);
+          allPlates = [...allPlates, ...filteredResults];
         }
-        const results = await Promise.all(fetchPromises);
 
-        // Filter out null values (plates without images)
-        const filteredResults = results.filter(plate => plate !== null);
-
-        setPlateData(filteredResults);
+        // After all batches are fetched, set the unique plates in state
+        setPlateData(allPlates);
       } catch (error) {
         setError('Error fetching data');
       } finally {
@@ -82,7 +86,8 @@ export default function Home() {
     };
 
     fetchAllPlates();
-  }, []); // Removed progress from dependency array
+  }, []);
+
 
   const progressPercentage = Math.min((progress / totalPlates) * 100, 100);
 
@@ -111,26 +116,34 @@ export default function Home() {
   return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-gray-100">
       <Head>
-        <title>Ohio Plate Checker</title>
+        <title>BuckeyePlates</title>
         <meta name="description" content="View all available Ohio plates from 0 to 1000" />
         <link rel="icon" href="/favicon.ico" />
       </Head>
 
       <main className="flex flex-col items-center justify-center flex-1 w-full text-center">
-        <h1 className="text-5xl font-bold text-gray-900">
-          Welcome to Ohio Plate Checker
+        <h1 className="text-5xl font-bold text-gray-900 mt-10">
+          Welcome to BuckeyePlates
         </h1>
 
         <p className="mt-4 text-xl text-gray-700">
           Browse through all available plates from 0 to 1000.
         </p>
 
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4 mt-10 w-full max-w-4xl">
+        <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3 gap-x-40 gap-y-6 mt-10 w-full max-w-4xl">
           {plateData.map((plate) => (
-            <div key={plate.plate} className="p-6 bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow flex flex-col items-center">
-              <h3 className="text-2xl font-medium text-gray-800 mb-4">Plate {plate.plate}</h3>
+            <div
+              key={plate.plate}
+              className="p-4 bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow flex flex-col items-center"
+              style={{ minHeight: '200px', width: '335px' }} // Explicitly set a larger width
+            >
+              <h3 className="text-2xl font-medium text-gray-800 mb-0">Plate {plate.plate}</h3>
               <div className="w-full h-full flex justify-center items-center overflow-hidden">
-                <div className="w-full h-auto" style={{ maxHeight: '100%' }} dangerouslySetInnerHTML={{ __html: plate.data }} />
+                <div
+                  className="w-full h-auto"
+                  style={{ maxHeight: '100%' }}
+                  dangerouslySetInnerHTML={{ __html: plate.data }}
+                />
               </div>
             </div>
           ))}
